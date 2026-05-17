@@ -43,8 +43,14 @@ bp-ocr-cnn/
 ├── dataset/                # підготовлений датасет для YOLO #1
 ├── dataset_digits/         # підготовлений датасет для YOLO #2
 ├── runs/detect/
-│   ├── display_detector_v1/weights/best.pt    # модель дисплея (стабільна)
-│   ├── digit_detector_latest/weights/best.pt  # активна модель цифр
+│   ├── display_detector_v1/weights/
+│   │   ├── best.pt         # модель дисплея (стабільна)
+│   │   ├── best.onnx       # fp32 ONNX (11.7 MB)
+│   │   └── best_int8.onnx  # динамічна int8 (3.2 MB)
+│   ├── digit_detector_latest/weights/
+│   │   ├── best.pt         # активна модель цифр
+│   │   ├── best.onnx       # fp32 ONNX (11.6 MB)
+│   │   └── best_int8.onnx  # динамічна int8 (3.1 MB)
 │   └── digit_detector_bak/weights/best.pt     # попередня версія (страховка)
 ├── prepare_dataset.py
 ├── prepare_dataset_digits.py
@@ -54,6 +60,8 @@ bp-ocr-cnn/
 ├── verify_labels.py
 ├── recognize_digits.py
 ├── validate_pipeline.py
+├── export_onnx.py
+├── quantize.py
 ├── requirements.txt
 ├── PLAN.md
 └── README.md
@@ -70,7 +78,9 @@ bp-ocr-cnn/
 | `train_yolo_digits.py` | Тренує YOLO #2 з ротацією latest/bak |
 | `verify_labels.py` | Звіряє розмітку YOLO з ground truth з .json |
 | `recognize_digits.py` | Інференс YOLO #2 + збірка JSON на одному cropped |
-| `validate_pipeline.py` | End-to-end на всіх фото з `img/`, порівняння з ground truth |
+| `validate_pipeline.py` | End-to-end на всіх фото з `img/`, порівняння з ground truth; підтримує `--backend pt\|onnx\|int8\|int8-display` |
+| `export_onnx.py` | Експортує `.pt` → `.onnx` (fp32, opset 17) для обох моделей |
+| `quantize.py` | Квантизує `.onnx` → `_int8.onnx` (динамічна weight-only int8) |
 
 ## Як це працює — повний цикл розробки
 
@@ -114,6 +124,43 @@ python validate_pipeline.py img
 # 8. Якщо нова модель краща за bak — скопіювати best.pt у aivm-photo-api,
 #    redeploy контейнера. Інакше — повернутись до bak.
 ```
+
+## ONNX-експорт і квантизація
+
+Моделі експортовані у ONNX для використання в браузері (onnxruntime-web) — частина плану перенесення OCR на клієнт ([local-ocr-migration-plan.md](../docs/local-ocr-migration-plan.md)).
+
+### Точність на еталонному датасеті (42 фото)
+
+| Backend | Точність | display_detector | digit_detector | Всього |
+|---|---|---|---|---|
+| PyTorch `.pt` | 42/42 (100%) | ~6 MB | ~6 MB | ~12 MB |
+| ONNX fp32 | 42/42 (100%) | 11.7 MB | 11.6 MB | 23.3 MB |
+| ONNX int8 | 42/42 (100%) | 3.2 MB | 3.1 MB | **6.3 MB** |
+
+Квантизація — динамічна (weight-only), без калібрувального датасету. Точність не просідає на поточному наборі; при появі нових фото — перевіряти повторно.
+
+### Як оновити ONNX-файли після перетренування
+
+```bash
+cd D:\dev\bp_tracker\bp-ocr-cnn
+.\venv\Scripts\Activate.ps1
+
+# Після train_yolo_digits.py (або train_yolo.py):
+python export_onnx.py       # best.pt -> best.onnx
+python quantize.py          # best.onnx -> best_int8.onnx
+
+# Перевірити що точність не впала
+python validate_pipeline.py img --backend int8
+```
+
+### Опції `--backend` у `validate_pipeline.py`
+
+| Опція | Моделі |
+|---|---|
+| `pt` | обидві `.pt` (за замовчуванням) |
+| `onnx` | обидві fp32 `.onnx` |
+| `int8` | обидві `_int8.onnx` |
+| `int8-display` | display int8 + digit fp32 (для тестування ізольовано) |
 
 ## Процедура розмітки
 
@@ -161,11 +208,20 @@ python validate_pipeline.py img
 cd D:\dev\bp_tracker\bp-ocr-cnn
 .\venv\Scripts\Activate.ps1
 
-# Перевірити поточну модель на всіх фото
+# Перевірити поточну модель на всіх фото (PyTorch)
 python validate_pipeline.py img
+
+# Перевірити ONNX fp32
+python validate_pipeline.py img --backend onnx
+
+# Перевірити int8 (браузерний варіант)
+python validate_pipeline.py img --backend int8
+
+# Оновити ONNX після перетренування
+python export_onnx.py && python quantize.py
 ```
 
-Потрібно: Python 3.11+, PyTorch (CPU достатньо), ultralytics. Залежності в `requirements.txt`.
+Потрібно: Python 3.12+, PyTorch (CPU достатньо), ultralytics, onnx, onnxruntime. Залежності в `requirements.txt`.
 
 ## Зв'язок з іншими частинами системи
 

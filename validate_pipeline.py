@@ -6,12 +6,15 @@
   4. Порівняння з ground truth з .json
 
 Бере КОЖНЕ фото з папки img/, для якого є парний .json.
-Чи розмічене воно вручну (.txt в labels2) — не має значення для пайплайну.
 
-Запуск:
+Запуск з PyTorch-моделями (за замовчуванням):
   python validate_pipeline.py img
+
+Запуск з ONNX-моделями (після export_onnx.py):
+  python validate_pipeline.py img --backend onnx
 """
 
+import argparse
 import sys
 import json
 import time
@@ -23,8 +26,14 @@ from ultralytics import YOLO
 from recognize_digits import boxes_from_result, group_into_rows, assemble_number, class_agnostic_nms
 
 
-DISPLAY_MODEL = "runs/detect/display_detector_v1/weights/best.pt"
-DIGIT_MODEL = "runs/detect/digit_detector_latest/weights/best.pt"
+DISPLAY_MODEL_PT = "runs/detect/display_detector_v1/weights/best.pt"
+DIGIT_MODEL_PT = "runs/detect/digit_detector_latest/weights/best.pt"
+
+DISPLAY_MODEL_ONNX = "runs/detect/display_detector_v1/weights/best.onnx"
+DIGIT_MODEL_ONNX = "runs/detect/digit_detector_latest/weights/best.onnx"
+
+DISPLAY_MODEL_INT8 = "runs/detect/display_detector_v1/weights/best_int8.onnx"
+DIGIT_MODEL_INT8 = "runs/detect/digit_detector_latest/weights/best_int8.onnx"
 
 # Порог впевненості для YOLO #1 — низький, бо метрики train.val показали 0.06-0.11
 DISPLAY_CONF = 0.05
@@ -86,12 +95,23 @@ def recognize_on_cropped(cropped, digit_model):
     return {"sys": nums[0], "dia": nums[1], "pul": nums[2]}, boxes
 
 
-def main(orig_dir: str):
+def resolve_models(backend: str) -> tuple[str, str]:
+    if backend == "onnx":
+        return DISPLAY_MODEL_ONNX, DIGIT_MODEL_ONNX
+    if backend == "int8":
+        return DISPLAY_MODEL_INT8, DIGIT_MODEL_INT8
+    if backend == "int8-display":
+        return DISPLAY_MODEL_INT8, DIGIT_MODEL_ONNX
+    return DISPLAY_MODEL_PT, DIGIT_MODEL_PT
+
+
+def main(orig_dir: str, backend: str):
     import cv2
     orig = Path(orig_dir)
 
-    display_model = YOLO(DISPLAY_MODEL)
-    digit_model = YOLO(DIGIT_MODEL)
+    display_path, digit_path = resolve_models(backend)
+    display_model = YOLO(display_path)
+    digit_model = YOLO(digit_path)
 
     # Знаходимо всі фото з ground truth (.json поряд)
     pairs = []
@@ -100,9 +120,10 @@ def main(orig_dir: str):
         if json_path.exists():
             pairs.append((jpg, json_path))
 
+    print(f"Backend:  {backend.upper()}")
     print(f"Знайдено {len(pairs)} фото з ground truth у {orig}")
-    print(f"Моделі: {DISPLAY_MODEL}")
-    print(f"        {DIGIT_MODEL}")
+    print(f"Моделі: {display_path}")
+    print(f"        {digit_path}")
     print("=" * 80)
     print(f"{'file':<30} {'predicted':>15} {'truth':>15} {'time':>7}  status")
     print("-" * 80)
@@ -174,7 +195,13 @@ def main(orig_dir: str):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print(__doc__)
-        sys.exit(1)
-    main(sys.argv[1])
+    parser = argparse.ArgumentParser(description="Validate OCR pipeline on all img/*.jpg")
+    parser.add_argument("img_dir", help="Directory with .jpg + .json pairs")
+    parser.add_argument(
+        "--backend",
+        choices=["pt", "onnx", "int8", "int8-display"],
+        default="pt",
+        help="pt | onnx | int8 (both quantized) | int8-display (display int8 + digit fp32)",
+    )
+    args = parser.parse_args()
+    main(args.img_dir, args.backend)
