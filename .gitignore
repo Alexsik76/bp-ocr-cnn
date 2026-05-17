@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Ultralytics / training artifacts
+runs/                          # train runs, val outputs — only weights matter
+!runs/detect/                  # дозволити папку
+runs/detect/*                  # але приховати все всередині
+!runs/detect/display_detector_v1/
+!runs/detect/digit_detector_latest/
+!runs/detect/digit_detector_bak/
+
+# Within kept model folders — keep only what matters
+runs/detect/display_detector_v1/*
+runs/detect/digit_detector_latest/*
+runs/detect/digit_detector_bak/*
+!runs/detect/display_detector_v1/weights/
+!runs/detect/digit_detector_latest/weights/
+!runs/detect/digit_detector_bak/weights/
+
+# Ultralytics base models (re-downloaded automatically)
+yolov8n.pt
+yolov8s.pt
+yolov8m.pt
+yolov8l.pt
+yolov8x.pt
+
+# Intermediate / generated data
+dataset/
+dataset_digits/
+debug_pred/
+debug/
+debug_stages/
+threshold_test/
+
+# OS artifacts
+.DS_Store
+desktop.ini
+
+# Local logs
+*.log
+repo
+img/
