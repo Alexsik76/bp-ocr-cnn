@@ -82,9 +82,10 @@ def main():
         degrees=0.0,
         translate=0.05,
         scale=0.1,
-        hsv_h=0.01,
-        hsv_s=0.3,
-        hsv_v=0.3,
+        hsv_h=0.1,
+        hsv_s=0.9,
+        hsv_v=0.9,
+        bgr=0.5,
         mosaic=0.5,
     )
 

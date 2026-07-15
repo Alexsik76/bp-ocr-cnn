@@ -1,79 +1,56 @@
 """
 Тренування YOLOv8-nano для детекції LCD-дисплея тонометра.
-
-Запуск:
-  python train_yolo.py
-
-Налаштування зверху файлу — змінюй як треба.
-
-Результат:
-  runs/detect/train/weights/best.pt   — найкраща модель
-  runs/detect/train/weights/last.pt   — остання epoch
-  runs/detect/train/results.png       — графіки тренування
-  runs/detect/train/val_batch*.jpg    — приклади детекції на val
+Тепер з автоматичним бекапом старої моделі.
 """
 
+import shutil
+from pathlib import Path
 from ultralytics import YOLO
 
 # ---------- НАЛАШТУВАННЯ ----------
-
-# Шлях до конфігу датасету (створений prepare_dataset.py)
 DATA_YAML = "dataset/data.yaml"
-
-# Базова модель. yolov8n = nano (~6 МБ), найшвидша і найменша.
-# Альтернативи якщо точність недостатня: yolov8s (~22 МБ), yolov8m (~52 МБ)
 BASE_MODEL = "yolov8n.pt"
-
-# Кількість епох. На 34 фото 100 епох цілком достатньо (overfit неминучий
-# з таким датасетом, але YOLO має built-in зупинку якщо метрика не росте).
 EPOCHS = 100
-
-# Розмір вхідного зображення. 640 — стандарт.
-# Для нашої задачі (один великий об'єкт) можна 416 — швидше, без втрати точності.
 IMG_SIZE = 640
-
-# Batch size. На CPU великий не вийде. 4-8 нормально.
 BATCH = 8
-
-# Patience — скільки епох чекати покращення метрики перед ранньою зупинкою.
 PATIENCE = 30
-
-# Назва запуску — створиться папка runs/detect/<NAME>/
-NAME = "display_detector_v1"
-
+# Назва папки, яку ми вважаємо "останньою/актуальною"
+NAME = "display_detector_latest"
 # ----------------------------------
 
+def manage_model_backups(name):
+    """Перейменовує існуючу папку в _bak перед новим тренуванням."""
+    runs_dir = Path("runs/detect")
+    target_dir = runs_dir / name
+    bak_dir = runs_dir / f"{name}_bak"
+
+    if target_dir.exists():
+        if bak_dir.exists():
+            shutil.rmtree(bak_dir)
+        target_dir.rename(bak_dir)
+        print(f"Попередня модель переміщена в: {bak_dir}")
 
 def main():
+    # 1. Готуємо місце для нової моделі
+    manage_model_backups(NAME)
+    
     model = YOLO(BASE_MODEL)
 
-    results = model.train(
+    # 2. Запуск тренування
+    model.train(
         data=DATA_YAML,
         epochs=EPOCHS,
         imgsz=IMG_SIZE,
         batch=BATCH,
         patience=PATIENCE,
         name=NAME,
-        # device=0 для GPU, "cpu" для CPU. Auto-detect зазвичай добре працює.
         device="cpu",
-        # Невелика аугментація — поможе з малим датасетом
-        hsv_h=0.015,    # відтінок
-        hsv_s=0.7,      # насиченість
-        hsv_v=0.4,      # яскравість
-        degrees=10,     # поворот (важливо для нашого кейсу — кутова зйомка)
-        translate=0.1,
-        scale=0.3,
-        flipud=0.0,     # не перевертати догори ногами — дисплей завжди прямо
-        fliplr=0.0,     # і не дзеркалити — рядки sys/dia/pul мають порядок
-        mosaic=0.5,     # mozaika допомагає з малими датасетами
+        hsv_h=0.1, hsv_s=0.9, hsv_v=0.9, bgr=0.5,
+        degrees=10, translate=0.1, scale=0.3,
+        flipud=0.0, fliplr=0.0, mosaic=0.5
     )
 
-    print("\n" + "=" * 60)
-    print(f"Тренування завершено. Найкраща модель:")
-    print(f"  runs/detect/{NAME}/weights/best.pt")
-    print(f"Графіки: runs/detect/{NAME}/results.png")
-    print(f"Приклади детекції на val: runs/detect/{NAME}/val_batch*.jpg")
-
+    print(f"\nГотово. Активна модель: runs/detect/{NAME}/weights/best.pt")
 
 if __name__ == "__main__":
     main()
