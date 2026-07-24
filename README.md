@@ -2,7 +2,7 @@
 
 # bp-ocr-cnn
 
-Tool for training and developing ML models to recognize digits from the LCD display of the **Paramed Expert-X** blood pressure monitor. Ready-to-use models are copied to [aivm-photo-api](../aivm-photo-api) for production deployment.
+Tool for training and developing ML models to recognize digits from the LCD display of the **Paramed Expert-X** blood pressure monitor. Ready-to-use models are copied to [aivm-photo-api](https://github.com/Alexsik76/aivm-photo-api) for production deployment.
 
 ## What it does
 
@@ -129,7 +129,7 @@ python validate_pipeline.py img
 
 ## ONNX Export and Quantization
 
-Models are exported to ONNX format for browser execution via `onnxruntime-web` — part of moving OCR processing to the client side ([local-ocr-migration-plan.md](../docs/local-ocr-migration-plan.md)).
+Models are exported to ONNX format for browser execution via `onnxruntime-web` — part of moving OCR processing to the client side.
 
 ### Benchmark Dataset Accuracy (42 photos)
 
