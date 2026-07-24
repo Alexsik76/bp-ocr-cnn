@@ -1,57 +1,57 @@
 # bp-ocr-cnn
 
-Інструмент для розробки і тренування ML-моделей розпізнавання цифр з LCD-дисплея тонометра **Paramed Expert-X**. Готові моделі копіюються в [aivm-photo-api](../aivm-photo-api) для використання у продакшні.
+Tool for training and developing ML models to recognize digits from the LCD display of the **Paramed Expert-X** blood pressure monitor. Ready-to-use models are copied to [aivm-photo-api](../aivm-photo-api) for production deployment.
 
-## Що це робить
+## What it does
 
-Бере фото тонометра, повертає JSON з показниками тиску:
+Takes a photo of a blood pressure monitor and returns a JSON object with blood pressure values:
 
 ```
 20260516_044548.jpg  →  {"sys": 125, "dia": 74, "pul": 73}
 ```
 
-Точність на тестовому наборі: **42/42 (100%)**, час інференсу: **~50 мс на CPU** (Ryzen 7 5700X3D).
+Accuracy on the test set: **42/42 (100%)**, inference speed: **~50 ms on CPU** (Ryzen 7 5700X3D).
 
-## Архітектура пайплайну
+## Pipeline Architecture
 
-Двостадійний YOLOv8:
+Two-stage YOLOv8:
 
 ```mermaid
 flowchart TD
-    A[Оригінальне фото<br/>~1080×1920] --> B[YOLO #1<br/>display_detector<br/>знаходить дисплей]
+    A[Original photo<br/>~1080×1920] --> B[YOLO #1<br/>display_detector<br/>finds display]
     B --> C[cropped 400×480]
-    C --> D[YOLO #2<br/>digit_detector<br/>знаходить цифри 0–9]
-    D --> E[class_agnostic_nms<br/>видалити дублікати рамок]
-    E --> F[K-means з k=3<br/>групування рамок у 3 рядки]
+    C --> D[YOLO #2<br/>digit_detector<br/>finds digits 0–9]
+    D --> E[class_agnostic_nms<br/>removes duplicate boxes]
+    E --> F[K-means with k=3<br/>groups boxes into 3 rows]
     F --> G["{sys, dia, pul}"]
 ```
 
-**Чому два YOLO замість одного:** простіше тренувати і дебажити, легше донавчати окремо. Перший майже не потребує перетренування (дисплей завжди виглядає однаково), другий донавчається при поповненні датасету.
+**Why two YOLO models instead of one:** Easier to train and debug, and simpler to retrain independently. The first model rarely needs retraining (the display layout stays consistent), while the second model can be retrained as new dataset photos arrive.
 
-**Чому YOLOv8 nano:** ~50 мс на повний пайплайн на CPU. Обидві моделі разом ~12 МБ — комфортно версіонувати в git.
+**Why YOLOv8 nano:** ~50 ms for the entire pipeline on CPU. Both models combined are ~12 MB — easy to version control in Git.
 
-## Структура проєкту
+## Project Structure
 
 ```
 bp-ocr-cnn/
 ├── venv/
-├── img/                    # оригінальні .jpg + .json (ground truth)
-├── cropped/                # cropped дисплеї 400×480 (вихід YOLO #1)
+├── img/                    # original .jpg + .json (ground truth)
+├── cropped/                # cropped displays 400×480 (YOLO #1 output)
 ├── labels/
-│   ├── labels1/            # YOLO-розмітка дисплея (1 клас)
-│   └── labels3/            # YOLO-розмітка цифр (10 класів), актуальна порція
-├── dataset/                # підготовлений датасет для YOLO #1
-├── dataset_digits/         # підготовлений датасет для YOLO #2
+│   ├── labels1/            # YOLO display labels (1 class)
+│   └── labels3/            # YOLO digit labels (10 classes), active batch
+├── dataset/                # prepared dataset for YOLO #1
+├── dataset_digits/         # prepared dataset for YOLO #2
 ├── runs/detect/
 │   ├── display_detector_v1/weights/
-│   │   ├── best.pt         # модель дисплея (стабільна)
+│   │   ├── best.pt         # display model (stable)
 │   │   ├── best.onnx       # fp32 ONNX (11.7 MB)
-│   │   └── best_int8.onnx  # динамічна int8 (3.2 MB)
+│   │   └── best_int8.onnx  # dynamic int8 (3.2 MB)
 │   ├── digit_detector_latest/weights/
-│   │   ├── best.pt         # активна модель цифр
+│   │   ├── best.pt         # active digit model
 │   │   ├── best.onnx       # fp32 ONNX (11.6 MB)
-│   │   └── best_int8.onnx  # динамічна int8 (3.1 MB)
-│   └── digit_detector_bak/weights/best.pt     # попередня версія (страховка)
+│   │   └── best_int8.onnx  # dynamic int8 (3.1 MB)
+│   └── digit_detector_bak/weights/best.pt     # previous version (backup)
 ├── prepare_dataset.py
 ├── prepare_dataset_digits.py
 ├── train_yolo.py
@@ -67,168 +67,168 @@ bp-ocr-cnn/
 └── README.md
 ```
 
-## Каталог скриптів
+## Scripts Directory
 
-| Скрипт | Призначення |
+| Script | Purpose |
 |---|---|
-| `prepare_dataset.py` | Готує датасет з 1 класу (дисплей) для YOLO #1 |
-| `train_yolo.py` | Тренує YOLO #1 |
-| `infer_yolo.py` | Прогонить YOLO #1, нарізає вхідні фото у `cropped/` |
-| `prepare_dataset_digits.py` | Готує датасет з 10 класів (цифри 0-9) для YOLO #2 |
-| `train_yolo_digits.py` | Тренує YOLO #2 з ротацією latest/bak |
-| `verify_labels.py` | Звіряє розмітку YOLO з ground truth з .json |
-| `recognize_digits.py` | Інференс YOLO #2 + збірка JSON на одному cropped |
-| `validate_pipeline.py` | End-to-end на всіх фото з `img/`, порівняння з ground truth; підтримує `--backend pt\|onnx\|int8\|int8-display` |
-| `export_onnx.py` | Експортує `.pt` → `.onnx` (fp32, opset 17) для обох моделей |
-| `quantize.py` | Квантизує `.onnx` → `_int8.onnx` (динамічна weight-only int8) |
+| `prepare_dataset.py` | Prepares dataset for 1 class (display) for YOLO #1 |
+| `train_yolo.py` | Trains YOLO #1 |
+| `infer_yolo.py` | Runs YOLO #1, crops input photos into `cropped/` |
+| `prepare_dataset_digits.py` | Prepares dataset for 10 classes (digits 0-9) for YOLO #2 |
+| `train_yolo_digits.py` | Trains YOLO #2 with latest/bak rotation |
+| `verify_labels.py` | Compares YOLO labels with ground truth from .json |
+| `recognize_digits.py` | YOLO #2 inference + JSON assembly on a single cropped photo |
+| `validate_pipeline.py` | End-to-end evaluation on all photos in `img/`, comparing with ground truth; supports `--backend pt\|onnx\|int8\|int8-display` |
+| `export_onnx.py` | Exports `.pt` → `.onnx` (fp32, opset 17) for both models |
+| `quantize.py` | Quantizes `.onnx` → `_int8.onnx` (dynamic weight-only int8) |
 
-## Як це працює — повний цикл розробки
+## How It Works — Full Development Cycle
 
-### Початкове тренування (зроблено один раз)
+### Initial Training (Done once)
 
-1. Зібрано 42 фото тонометра з ручним записом справжніх значень у `.json`.
-2. Розмічено дисплей на всіх 42 фото (`labels/labels1/`) → натреновано YOLO #1.
-3. Прогнано `infer_yolo.py` → отримано 42 cropped дисплея.
-4. Розмічено цифри на 20 з 42 фото (`labels/labels3/`) → натреновано YOLO #2.
-5. End-to-end перевірка: 100% точності на всіх 42 фото.
+1. Collected 42 monitor photos with manually recorded real values in `.json`.
+2. Labeled display bounding boxes on all 42 photos (`labels/labels1/`) → trained YOLO #1.
+3. Ran `infer_yolo.py` → produced 42 cropped display images.
+4. Labeled digits on 20 out of 42 photos (`labels/labels3/`) → trained YOLO #2.
+5. End-to-end check: 100% accuracy on all 42 photos.
 
-### Донавчання при появі нових фото
+### Retraining on New Photos
 
-Через aivm-photo-api на NAS поступово накопичуються нові фото від реальних користувачів. При +N нових (де N — рішення на конкретний момент, орієнтовно 20-50):
+New photos from real users accumulate on the NAS via `aivm-photo-api`. When +N new photos are available (where N is usually 20–50):
 
 ```bash
 cd D:\dev\bp_tracker\bp-ocr-cnn
 .\venv\Scripts\Activate.ps1
 
-# 1. Скопіювати нові фото з NAS у img/
-# (нові .jpg + .json пари, сумісні з форматом aivm-photo-api)
+# 1. Copy new photos from NAS into img/
+# (new .jpg + .json pairs compatible with aivm-photo-api format)
 
-# 2. Нарізати cropped через YOLO #1
+# 2. Crop displays via YOLO #1
 python infer_yolo.py img
 
-# 3. Розмітити нові cropped через https://www.makesense.ai/
-#    Зберегти в labels/labelsN/ (нова порція, не перезаписувати попередню)
+# 3. Label new cropped images using https://www.makesense.ai/
+#    Save into labels/labelsN/ (new batch, do not overwrite previous)
 
-# 4. Перевірити розмітку через ground truth
+# 4. Verify labels against ground truth
 python verify_labels.py cropped labels\labelsN img
 
-# 5. Перепідготувати датасет
+# 5. Re-prepare the dataset
 python prepare_dataset_digits.py cropped labels\labelsN dataset_digits
 
-# 6. Тренування — автоматично ротує latest → bak
+# 6. Training — automatically rotates latest → bak
 python train_yolo_digits.py
 
-# 7. Валідація на всіх фото
+# 7. Validate on all photos
 python validate_pipeline.py img
 
-# 8. Якщо нова модель краща за bak — скопіювати best.pt у aivm-photo-api,
-#    redeploy контейнера. Інакше — повернутись до bak.
+# 8. If the new model is better than bak — copy best.pt to aivm-photo-api,
+#    redeploy the container. Otherwise — revert to bak.
 ```
 
-## ONNX-експорт і квантизація
+## ONNX Export and Quantization
 
-Моделі експортовані у ONNX для використання в браузері (onnxruntime-web) — частина плану перенесення OCR на клієнт ([local-ocr-migration-plan.md](../docs/local-ocr-migration-plan.md)).
+Models are exported to ONNX format for browser execution via `onnxruntime-web` — part of moving OCR processing to the client side ([local-ocr-migration-plan.md](../docs/local-ocr-migration-plan.md)).
 
-### Точність на еталонному датасеті (42 фото)
+### Benchmark Dataset Accuracy (42 photos)
 
-| Backend | Точність | display_detector | digit_detector | Всього |
+| Backend | Accuracy | display_detector | digit_detector | Total |
 |---|---|---|---|---|
 | PyTorch `.pt` | 42/42 (100%) | ~6 MB | ~6 MB | ~12 MB |
 | ONNX fp32 | 42/42 (100%) | 11.7 MB | 11.6 MB | 23.3 MB |
 | ONNX int8 | 42/42 (100%) | 3.2 MB | 3.1 MB | **6.3 MB** |
 
-Квантизація — динамічна (weight-only), без калібрувального датасету. Точність не просідає на поточному наборі; при появі нових фото — перевіряти повторно.
+Quantization is dynamic (weight-only), requiring no calibration dataset. Accuracy does not drop on the current test set; verify again whenever new photos are added.
 
-### Як оновити ONNX-файли після перетренування
+### How to Update ONNX Files After Retraining
 
 ```bash
 cd D:\dev\bp_tracker\bp-ocr-cnn
 .\venv\Scripts\Activate.ps1
 
-# Після train_yolo_digits.py (або train_yolo.py):
+# After train_yolo_digits.py (or train_yolo.py):
 python export_onnx.py       # best.pt -> best.onnx
 python quantize.py          # best.onnx -> best_int8.onnx
 
-# Перевірити що точність не впала
+# Verify that accuracy did not decrease
 python validate_pipeline.py img --backend int8
 ```
 
-### Опції `--backend` у `validate_pipeline.py`
+### `--backend` Options in `validate_pipeline.py`
 
-| Опція | Моделі |
+| Option | Models |
 |---|---|
-| `pt` | обидві `.pt` (за замовчуванням) |
-| `onnx` | обидві fp32 `.onnx` |
-| `int8` | обидві `_int8.onnx` |
-| `int8-display` | display int8 + digit fp32 (для тестування ізольовано) |
+| `pt` | both `.pt` (default) |
+| `onnx` | both fp32 `.onnx` |
+| `int8` | both `_int8.onnx` |
+| `int8-display` | display int8 + digit fp32 (for isolated testing) |
 
-## Процедура розмітки
+## Labeling Procedure
 
-**Сайт:** https://www.makesense.ai/
+**Website:** https://www.makesense.ai/
 
-1. Get Started → перетягнути фото з `cropped/` (з `cropped`, не з `img` — там цифри більші, зручніше).
-2. Object Detection.
-3. Створити 10 класів `0`, `1`, `2`, … `9` **рівно в такому порядку** (важливо: class id має збігатись з цифрою).
-4. Розмітка кожного фото:
-   - Прямокутник навколо кожної цифри окремо.
-   - **Рамка = "слот"**, не контур цифри. Висота і ширина рамок у межах одного рядка однакові для всіх цифр — `1` має таку саму рамку як `8`.
-   - НЕ розмічати: `mmHg`, `SYS/DIA/PUL`, іконки, кольорову смугу, `Expert-X`.
-   - SYS — верхній рядок (3 цифри), DIA — середній (2), PUL — нижній (2).
+1. Get Started → drag and drop photos from `cropped/` (from `cropped`, not `img` — digits are larger and easier to select).
+2. Select Object Detection.
+3. Create 10 classes: `0`, `1`, `2`, … `9` **in this exact order** (important: class ID must match the digit).
+4. Labeling each photo:
+   - Draw a bounding box around each digit individually.
+   - **Box = "slot"**, not digit contour. Box width and height within the same row should be equal for all digits — `1` uses the same box dimensions as `8`.
+   - DO NOT label: `mmHg`, `SYS/DIA/PUL`, icons, color bars, `Expert-X`.
+   - SYS — top row (3 digits), DIA — middle row (2), PUL — bottom row (2).
 5. Actions → Export Annotations → "A .zip package containing files in YOLO format".
-6. Розпакувати у `labels/labelsN/` (нова папка для кожної ітерації, попередні не перезаписувати).
+6. Extract into `labels/labelsN/` (create a new folder for each batch, do not overwrite previous ones).
 
-## Архітектурні рішення
+## Architectural Decisions
 
-- **Розмітка "слотами":** модель навчається структури семисегмента, а не контуру цифри. Так точніше розпізнаються вузькі цифри (`1`, `7`) поряд із широкими (`8`).
-- **Без flip/rotate у YOLO #2:** `2↔5` дзеркальні, `6↔9` перевернуті. Аугментація поворотом — лише ±10° для YOLO #1 (бо камера тримається з нахилом), для YOLO #2 — без поворотів узагалі.
-- **Class-agnostic NMS:** видаляє дублікати рамок які YOLO може лишити, бо вважає їх різними класами (наприклад `2` і `3` на одній позиції). Звичайний NMS YOLO не видаляє такі пари.
-- **K-means замість gap-detection:** гарантовано 3 рядки навіть при близьких Y-координатах. Жадібний gap-detection ламався на фото під кутом.
-- **digit_detector_bak/:** після кожного тренування попередня модель не видаляється, а перейменовується. Якщо нова виявилась гіршою — повернутися до попередньої одним перейменуванням.
+- **"Slot" Labeling:** The model learns seven-segment digit positions rather than tight contours. This improves detection accuracy for narrow digits (`1`, `7`) next to wide digits (`8`).
+- **No Flip/Rotate in YOLO #2:** `2↔5` are mirrored, `6↔9` are inverted. Rotation augmentation is set to ±10° for YOLO #1 only (since cameras may be slightly tilted); YOLO #2 uses no rotations.
+- **Class-agnostic NMS:** Removes duplicate overlapping bounding boxes that YOLO might produce when predicting different classes for the same location (e.g., `2` and `3`). Standard YOLO NMS does not remove such pairs.
+- **K-means instead of Gap-detection:** Guarantees 3 rows even when Y-coordinates are close. Greedy gap-detection failed on tilted images.
+- **digit_detector_bak/:** After each training run, the previous model is renamed rather than deleted. If the new model performs worse, you can revert by renaming it back.
 
-## Інтерпретація типових помилок
+## Common Errors & Troubleshooting
 
-| Тип | Симптом | Причина | Лікується |
+| Type | Symptom | Cause | Solution |
 |---|---|---|---|
-| 1 | `1233/78/77` | YOLO дає 2 рамки на одну цифру | NMS (виправлено) |
-| 2 | `13/77/73` | Пропущена цифра | Більше даних |
-| 3 | `137/79/73` замість `137/79/78` | Плутає класи (наприклад `8↔3`) | Більше даних |
-| 4 | `got 2 rows, need 3` | Gap-detection помилився | K-means (виправлено) |
+| 1 | `1233/78/77` | YOLO detects 2 boxes for one digit | NMS (fixed) |
+| 2 | `13/77/73` | Missing digit | Add more data |
+| 3 | `137/79/73` instead of `137/79/78` | Class confusion (e.g. `8↔3`) | Add more data |
+| 4 | `got 2 rows, need 3` | Gap-detection error | K-means (fixed) |
 
-## Що НЕ робити
+## What NOT to Do
 
-- Не міняти структуру `cropped/` — це вхід для YOLO #2 і пов'язана розмітка.
-- Не передавати фото з `cropped/` повторно через YOLO #1.
-- Не тренувати YOLO #2 з flip-аугментацією.
-- Не плутати папки `labels1` (дисплей) і `labels3+` (цифри) — це різні задачі.
-- Не видаляти `digit_detector_bak/` — це страховка від невдалого тренування.
+- Do not modify the `cropped/` structure — it serves as input for YOLO #2 and associated labels.
+- Do not pass images from `cropped/` through YOLO #1 again.
+- Do not train YOLO #2 with flip augmentation.
+- Do not mix `labels1` (display) and `labels3+` (digits) folders — they represent different tasks.
+- Do not delete `digit_detector_bak/` — it serves as a safety fallback.
 
-## Локальна розробка
+## Local Development
 
 ```bash
 cd D:\dev\bp_tracker\bp-ocr-cnn
 .\venv\Scripts\Activate.ps1
 
-# Перевірити поточну модель на всіх фото (PyTorch)
+# Check current model performance on all photos (PyTorch)
 python validate_pipeline.py img
 
-# Перевірити ONNX fp32
+# Check ONNX fp32
 python validate_pipeline.py img --backend onnx
 
-# Перевірити int8 (браузерний варіант)
+# Check int8 (browser version)
 python validate_pipeline.py img --backend int8
 
-# Оновити ONNX після перетренування
+# Update ONNX after retraining
 python export_onnx.py && python quantize.py
 ```
 
-Потрібно: Python 3.12+, PyTorch (CPU достатньо), ultralytics, onnx, onnxruntime. Залежності в `requirements.txt`.
+Requirements: Python 3.12+, PyTorch (CPU is sufficient), ultralytics, onnx, onnxruntime. Dependencies are listed in `requirements.txt`.
 
-## Зв'язок з іншими частинами системи
+## Integration with Other System Components
 
-- **aivm-photo-api** — споживач готових моделей. При деплої нової моделі копіюється в `../aivm-photo-api/models/`, контейнер перебудовується.
-- **bptracker-backend** — викликає aivm-photo-api для розпізнавання, отримує JSON.
-- **Корінний PLAN.md** (`../PLAN.md`) — поточні задачі по цій частині.
+- **aivm-photo-api** — consumer of trained models. When deploying a new model, copy it to `../aivm-photo-api/models/` and rebuild the container.
+- **bptracker-backend** — calls aivm-photo-api for recognition and receives JSON.
+- **Root PLAN.md** (`../PLAN.md`) — overall project roadmap.
 
-## Подальші плани
+## Future Plans
 
-Див. [PLAN.md](./PLAN.md) — задачі по тренуванню, дорозмітці, експериментам з моделлю.
+See [PLAN.md](./PLAN.md) — tasks for model training, extra annotations, and architecture experiments.
