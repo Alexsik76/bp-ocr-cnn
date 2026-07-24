@@ -166,7 +166,7 @@ def recognize(image_path: str, model_path: str = DEFAULT_MODEL) -> dict:
     # Class-agnostic NMS — прибирає дублікати рамок
     boxes = class_agnostic_nms(boxes)
     max_h = max(b["h"] for b in boxes)
-    # boxes = [b for b in boxes if b["h"] > max_h * 0.4]
+    boxes = [b for b in boxes if b["h"] > max_h * 0.4]
     # boxes = [b for b in boxes if b["cx"] > 150]
     print(f"RAW BOXES: {[(b['cls'], int(b['cx']), int(b['cy']), int(b['h'])) for b in boxes]}") # Додано для діагностики
     rows = group_into_rows(boxes)

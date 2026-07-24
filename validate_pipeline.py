@@ -63,7 +63,7 @@ def recognize_on_cropped(cropped, digit_model):
     # Твоя логіка фільтрації з recognize_digits.py
     max_h = max(b["h"] for b in boxes)
     boxes = [b for b in boxes if b["h"] > max_h * 0.4]
-    boxes = [b for b in boxes if b["cx"] > 150]
+    # boxes = [b for b in boxes if b["cx"] > 150]
 
     rows = group_into_rows(boxes)
     if len(rows) != 3:
