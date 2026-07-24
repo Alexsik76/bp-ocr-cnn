@@ -1,3 +1,5 @@
+[English README](README.md)
+
 # bp-ocr-cnn
 
 Інструмент для розробки і тренування ML-моделей розпізнавання цифр з LCD-дисплея тонометра **Paramed Expert-X**. Готові моделі копіюються в [aivm-photo-api](../aivm-photo-api) для використання у продакшні.
