@@ -14,7 +14,7 @@ Takes a photo of a blood pressure monitor and returns a JSON object with blood p
 20260516_044548.jpg  →  {"sys": 125, "dia": 74, "pul": 73}
 ```
 
-Accuracy on the test set: **42/42 (100%)**, inference speed: **~50 ms on CPU** (Ryzen 7 5700X3D).
+End-to-end check: **42/42 photos parsed correctly**. Note that these 42 photos are also the training set — the dataset is too small for a separate held-out split. The number shows the pipeline works end to end, not how it generalises to unseen devices. Inference speed: **~50 ms on CPU** (Ryzen 7 5700X3D).
 
 ## Pipeline Architecture
 
@@ -34,40 +34,70 @@ flowchart TD
 
 **Why YOLOv8 nano:** ~50 ms for the entire pipeline on CPU. Both models combined are ~12 MB — easy to version control in Git.
 
+## Screenshots
+
+### Stage 1 — display detection
+
+![Display detector on photos with different lighting, angle and background](docs/img/detector_conditions.jpg)
+
+The first-stage detector locates the monitor screen on a full photo.
+The examples show different lighting, camera angles and backgrounds.
+
+### Stage 2 — digit recognition
+
+![Digit detector on cropped displays, with class and confidence](docs/img/digit_recognition.jpg)
+
+The second-stage detector reads each digit on the cropped display.
+Every box shows the predicted class and the confidence score.
+
+## Results
+
+| Model | Precision | Recall | mAP50 | mAP50-95 | Epochs |
+|---|---|---|---|---|---|
+| Display detector | 0.990 | 1.000 | 0.995 | 0.946 | 100 |
+| Digit detector | 0.992 | 1.000 | 0.995 | 0.856 | 37 |
+
+These scores come from a small and uniform dataset: photos of one device model, taken indoors by one person. The numbers show that the task is narrow, not that the models are universal. A different device or a wider range of conditions would need new training data.
+
 ## Project Structure
 
 ```
 bp-ocr-cnn/
-├── venv/
-├── img/                    # original .jpg + .json (ground truth)
 ├── cropped/                # cropped displays 400×480 (YOLO #1 output)
+├── docs/
+│   ├── img/                # documentation screenshots
+│   │   ├── detector_conditions.jpg
+│   │   └── digit_recognition.jpg
+│   └── bp-ocr-cnn_PLAN.md  # project roadmap
+├── img_test/               # sample photo + ground truth for testing
 ├── labels/
 │   ├── labels1/            # YOLO display labels (1 class)
-│   └── labels3/            # YOLO digit labels (10 classes), active batch
-├── dataset/                # prepared dataset for YOLO #1
-├── dataset_digits/         # prepared dataset for YOLO #2
+│   └── labels5/            # YOLO digit labels (10 classes), active batch
+├── latest_models/          # exported ONNX models
 ├── runs/detect/
 │   ├── display_detector_v1/weights/
 │   │   ├── best.pt         # display model (stable)
-│   │   ├── best.onnx       # fp32 ONNX (11.7 MB)
-│   │   └── best_int8.onnx  # dynamic int8 (3.2 MB)
+│   │   ├── best.onnx       # fp32 ONNX
+│   │   └── best_int8.onnx  # dynamic int8
 │   ├── digit_detector_latest/weights/
 │   │   ├── best.pt         # active digit model
-│   │   ├── best.onnx       # fp32 ONNX (11.6 MB)
-│   │   └── best_int8.onnx  # dynamic int8 (3.1 MB)
-│   └── digit_detector_bak/weights/best.pt     # previous version (backup)
+│   │   ├── best.onnx       # fp32 ONNX
+│   │   └── best_int8.onnx  # dynamic int8
+│   └── digit_detector_bak/weights/
+│       └── best.pt         # previous version backup
+├── export_onnx.py
+├── infer_yolo.py
 ├── prepare_dataset.py
 ├── prepare_dataset_digits.py
+├── pyproject.toml
+├── quantize.py
+├── recognize_digits.py
+├── requirements.txt
 ├── train_yolo.py
 ├── train_yolo_digits.py
-├── infer_yolo.py
-├── verify_labels.py
-├── recognize_digits.py
 ├── validate_pipeline.py
-├── export_onnx.py
-├── quantize.py
-├── requirements.txt
-├── PLAN.md
+├── verify_labels.py
+├── README-UKR.md
 └── README.md
 ```
 
@@ -82,9 +112,44 @@ bp-ocr-cnn/
 | `train_yolo_digits.py` | Trains YOLO #2 with latest/bak rotation |
 | `verify_labels.py` | Compares YOLO labels with ground truth from .json |
 | `recognize_digits.py` | YOLO #2 inference + JSON assembly on a single cropped photo |
-| `validate_pipeline.py` | End-to-end evaluation on all photos in `img/`, comparing with ground truth; supports `--backend pt\|onnx\|int8\|int8-display` |
+| `validate_pipeline.py` | End-to-end evaluation on all photos in a given directory (`img_test/` for a quick check), comparing with ground truth; supports `--backend pt\|onnx\|int8\|int8-display` |
 | `export_onnx.py` | Exports `.pt` → `.onnx` (fp32, opset 17) for both models |
 | `quantize.py` | Quantizes `.onnx` → `_int8.onnx` (dynamic weight-only int8) |
+
+## Local Development
+
+Note that `img/` contains the author's private photos and is not committed to Git; `img_test/` contains a sample photo with its ground truth so the pipeline can be verified after cloning.
+
+Create environment and install dependencies:
+
+```bash
+python -m venv venv
+
+# Linux/macOS:
+source venv/bin/activate
+# Windows:
+.\venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
+```
+
+Run evaluation commands:
+
+```bash
+# Check current model performance on test photo (PyTorch)
+python validate_pipeline.py img_test
+
+# Check ONNX fp32
+python validate_pipeline.py img_test --backend onnx
+
+# Check int8 (browser version)
+python validate_pipeline.py img_test --backend int8
+
+# Update ONNX after retraining
+python export_onnx.py && python quantize.py
+```
+
+Requirements: Python 3.12+, PyTorch (CPU is sufficient), ultralytics, onnx, onnxruntime. Dependencies are listed in `requirements.txt`.
 
 ## How It Works — Full Development Cycle
 
@@ -93,15 +158,17 @@ bp-ocr-cnn/
 1. Collected 42 monitor photos with manually recorded real values in `.json`.
 2. Labeled display bounding boxes on all 42 photos (`labels/labels1/`) → trained YOLO #1.
 3. Ran `infer_yolo.py` → produced 42 cropped display images.
-4. Labeled digits on 20 out of 42 photos (`labels/labels3/`) → trained YOLO #2.
-5. End-to-end check: 100% accuracy on all 42 photos.
+4. Labeled digits on 20 out of 42 photos (`labels/labels5/`) → trained YOLO #2.
+5. End-to-end check: 42/42 photos parsed correctly.
 
 ### Retraining on New Photos
 
 New photos from real users accumulate on the NAS via `aivm-photo-api`. When +N new photos are available (where N is usually 20–50):
 
 ```bash
-cd D:\dev\bp_tracker\bp-ocr-cnn
+# Linux/macOS:
+source venv/bin/activate
+# Windows:
 .\venv\Scripts\Activate.ps1
 
 # 1. Copy new photos from NAS into img/
@@ -114,10 +181,10 @@ python infer_yolo.py img
 #    Save into labels/labelsN/ (new batch, do not overwrite previous)
 
 # 4. Verify labels against ground truth
-python verify_labels.py cropped labels\labelsN img
+python verify_labels.py cropped labels/labelsN img
 
 # 5. Re-prepare the dataset
-python prepare_dataset_digits.py cropped labels\labelsN dataset_digits
+python prepare_dataset_digits.py cropped labels/labelsN dataset_digits
 
 # 6. Training — automatically rotates latest → bak
 python train_yolo_digits.py
@@ -133,20 +200,22 @@ python validate_pipeline.py img
 
 Models are exported to ONNX format for browser execution via `onnxruntime-web` — part of moving OCR processing to the client side.
 
-### Benchmark Dataset Accuracy (42 photos)
+### ONNX Accuracy Check (42 training photos)
 
-| Backend | Accuracy | display_detector | digit_detector | Total |
+| Backend | End-to-End Check | display_detector | digit_detector | Total Size |
 |---|---|---|---|---|
 | PyTorch `.pt` | 42/42 (100%) | ~6 MB | ~6 MB | ~12 MB |
 | ONNX fp32 | 42/42 (100%) | 11.7 MB | 11.6 MB | 23.3 MB |
 | ONNX int8 | 42/42 (100%) | 3.2 MB | 3.1 MB | **6.3 MB** |
 
-Quantization is dynamic (weight-only), requiring no calibration dataset. Accuracy does not drop on the current test set; verify again whenever new photos are added.
+Quantization is dynamic (weight-only), requiring no calibration dataset. Accuracy does not drop on the 42 training photos; verify again whenever new photos are added.
 
 ### How to Update ONNX Files After Retraining
 
 ```bash
-cd D:\dev\bp_tracker\bp-ocr-cnn
+# Linux/macOS:
+source venv/bin/activate
+# Windows:
 .\venv\Scripts\Activate.ps1
 
 # After train_yolo_digits.py (or train_yolo.py):
@@ -203,36 +272,15 @@ python validate_pipeline.py img --backend int8
 - Do not modify the `cropped/` structure — it serves as input for YOLO #2 and associated labels.
 - Do not pass images from `cropped/` through YOLO #1 again.
 - Do not train YOLO #2 with flip augmentation.
-- Do not mix `labels1` (display) and `labels3+` (digits) folders — they represent different tasks.
+- Do not mix `labels1` (display) and `labels5` (digits) folders — they represent different tasks.
 - Do not delete `digit_detector_bak/` — it serves as a safety fallback.
-
-## Local Development
-
-```bash
-cd D:\dev\bp_tracker\bp-ocr-cnn
-.\venv\Scripts\Activate.ps1
-
-# Check current model performance on all photos (PyTorch)
-python validate_pipeline.py img
-
-# Check ONNX fp32
-python validate_pipeline.py img --backend onnx
-
-# Check int8 (browser version)
-python validate_pipeline.py img --backend int8
-
-# Update ONNX after retraining
-python export_onnx.py && python quantize.py
-```
-
-Requirements: Python 3.12+, PyTorch (CPU is sufficient), ultralytics, onnx, onnxruntime. Dependencies are listed in `requirements.txt`.
 
 ## Integration with Other System Components
 
-- **aivm-photo-api** — consumer of trained models. When deploying a new model, copy it to `../aivm-photo-api/models/` and rebuild the container.
-- **bptracker-backend** — calls aivm-photo-api for recognition and receives JSON.
-- **Root PLAN.md** (`../PLAN.md`) — overall project roadmap.
+- **aivm-photo-api** — consumer of trained models. When deploying a new model, copy it to [aivm-photo-api](https://github.com/Alexsik76/aivm-photo-api) and redeploy the container.
+- **[bptracker-backend-fastapi](https://github.com/Alexsik76/bptracker-backend-fastapi)** — calls aivm-photo-api for recognition and receives JSON.
+- **Project plan** — see [bp-ocr-cnn_PLAN.md](docs/bp-ocr-cnn_PLAN.md) for roadmap details.
 
 ## Future Plans
 
-See [PLAN.md](./PLAN.md) — tasks for model training, extra annotations, and architecture experiments.
+See [bp-ocr-cnn_PLAN.md](docs/bp-ocr-cnn_PLAN.md) — tasks for model training, extra annotations, and architecture experiments.
