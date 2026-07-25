@@ -8,8 +8,8 @@ Usage:
 """
 
 from pathlib import Path
-from onnxruntime.quantization import quantize_dynamic, QuantType
 
+from onnxruntime.quantization import QuantType, quantize_dynamic
 
 MODELS = [
     "runs/detect/display_detector_v1/weights/best.onnx",

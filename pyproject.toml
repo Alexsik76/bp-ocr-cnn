@@ -1,0 +1,13 @@
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [
+    "runs",
+    "latest_models",
+    "cropped",
+    "img_test",
+    "labels",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

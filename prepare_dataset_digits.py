@@ -17,9 +17,9 @@
   python prepare_dataset_digits.py cropped labels/labels2 dataset_digits
 """
 
-import sys
 import random
 import shutil
+import sys
 from pathlib import Path
 
 VAL_RATIO = 0.2
@@ -56,7 +56,7 @@ def main(img_dir: str, labels_dir: str, out_dir: str):
     # Підрахунок зустрічей кожного класу — корисно для розуміння балансу
     class_count = {str(i): 0 for i in range(10)}
     for _, txt in pairs:
-        with open(txt, "r", encoding="utf-8") as f:
+        with open(txt, encoding="utf-8") as f:
             for line in f:
                 cls = line.strip().split()[0]
                 if cls in class_count:

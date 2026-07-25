@@ -17,15 +17,15 @@
   argv[3] — папка з оригіналами + .json (ground truth)
 """
 
-import sys
 import json
+import sys
 from pathlib import Path
 
 
 def read_label(txt_path: Path) -> list[dict]:
     """Читає YOLO-розмітку. Повертає список dict з cls, cx, cy, w, h."""
     boxes = []
-    with open(txt_path, "r", encoding="utf-8") as f:
+    with open(txt_path, encoding="utf-8") as f:
         for line in f:
             parts = line.strip().split()
             if len(parts) < 5:
@@ -73,11 +73,11 @@ def group_into_rows(boxes: list[dict]) -> list[list[dict]]:
                 new_centers.append(sum(b["cy"] for b in cluster) / len(cluster))
             else:
                 new_centers.append(centers[i])
-        if all(abs(a - b) < 1e-3 for a, b in zip(centers, new_centers)):
+        if all(abs(a - b) < 1e-3 for a, b in zip(centers, new_centers, strict=False)):
             break
         centers = new_centers
 
-    cluster_centers = list(zip(centers, clusters))
+    cluster_centers = list(zip(centers, clusters, strict=False))
     cluster_centers.sort(key=lambda x: x[0])
     rows = [sorted(cluster, key=lambda b: b["cx"]) for _, cluster in cluster_centers]
     rows = [r for r in rows if r]
@@ -121,7 +121,7 @@ def verify(cropped_dir: str, labels_dir: str, orig_dir: str):
             continue
 
         # Ground truth
-        with open(json_path, "r", encoding="utf-8") as f:
+        with open(json_path, encoding="utf-8") as f:
             gt = json.load(f)
         gt_str = f"{gt['sys']}/{gt['dia']}/{gt['pul']}"
 
@@ -138,7 +138,8 @@ def verify(cropped_dir: str, labels_dir: str, orig_dir: str):
         # Має бути рівно 3 рядки
         if len(numbers) != 3:
             label_str = "/".join(str(n) for n in numbers)
-            print(f"{jpg.name:<32} {label_str:>20} {gt_str:>20}   FAIL (got {len(numbers)} rows, need 3)")
+            msg = f"FAIL (got {len(numbers)} rows, need 3)"
+            print(f"{jpg.name:<32} {label_str:>20} {gt_str:>20}   {msg}")
             n_fail += 1
             continue
 

@@ -2,6 +2,8 @@
 
 # bp-ocr-cnn
 
+![CI](https://github.com/Alexsik76/bp-ocr-cnn/actions/workflows/ci.yml/badge.svg)
+
 Інструмент для розробки і тренування ML-моделей розпізнавання цифр з LCD-дисплея тонометра **Paramed Expert-X**. Готові моделі копіюються в [aivm-photo-api](../aivm-photo-api) для використання у продакшні.
 
 ## Що це робить

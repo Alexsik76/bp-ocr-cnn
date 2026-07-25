@@ -2,6 +2,8 @@
 
 # bp-ocr-cnn
 
+![CI](https://github.com/Alexsik76/bp-ocr-cnn/actions/workflows/ci.yml/badge.svg)
+
 Tool for training and developing ML models to recognize digits from the LCD display of the **Paramed Expert-X** blood pressure monitor. Ready-to-use models are copied to [aivm-photo-api](https://github.com/Alexsik76/aivm-photo-api) for production deployment.
 
 ## What it does

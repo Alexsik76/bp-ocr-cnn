@@ -18,7 +18,6 @@ from pathlib import Path
 import cv2
 from ultralytics import YOLO
 
-
 # ---------- НАЛАШТУВАННЯ ----------
 
 # Розмір вихідних обрізаних дисплеїв (буде ресайз)
@@ -67,8 +66,10 @@ def main(input_dir: str, model_path: str):
 
         if len(boxes) == 0:
             # Покажемо що модель взагалі знайшла без фільтра
-            all_confs = results_default[0].boxes.conf.cpu().numpy() if len(results_default[0].boxes) else []
-            print(f"  [FAIL] {jpg.name}: дисплей не знайдено. Всі confs: {all_confs.tolist() if len(all_confs) else 'пусто'}")
+            boxes_def = results_default[0].boxes
+            all_confs = boxes_def.conf.cpu().numpy() if len(boxes_def) else []
+            confs_str = all_confs.tolist() if len(all_confs) else "пусто"
+            print(f"  [FAIL] {jpg.name}: дисплей не знайдено. Всі confs: {confs_str}")
             failed.append(jpg.name)
             continue
 
@@ -112,5 +113,6 @@ def main(input_dir: str, model_path: str):
 
 if __name__ == "__main__":
     input_dir = sys.argv[1] if len(sys.argv) > 1 else "img"
-    model_path = sys.argv[2] if len(sys.argv) > 2 else "runs/detect/display_detector_v1/weights/best.pt"
+    default_model = "runs/detect/display_detector_v1/weights/best.pt"
+    model_path = sys.argv[2] if len(sys.argv) > 2 else default_model
     main(input_dir, model_path)

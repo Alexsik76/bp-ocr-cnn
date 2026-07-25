@@ -5,7 +5,8 @@
   python recognize_digits.py cropped/20260516_044548.jpg
 
 Запуск з кастомною моделлю:
-  python recognize_digits.py cropped/20260516_044548.jpg runs/detect/digit_detector_v1/weights/best.pt
+  python recognize_digits.py cropped/20260516_044548.jpg \
+      runs/detect/digit_detector_v1/weights/best.pt
 
 Вивід:
   {"sys": 125, "dia": 74, "pul": 73}
@@ -13,12 +14,11 @@
   {"error": "got 2 rows, need 3", "raw_boxes": [...]}
 """
 
-import sys
 import json
+import sys
 from pathlib import Path
 
 from ultralytics import YOLO
-
 
 CONF_THRESHOLD = 0.25
 DEFAULT_MODEL = "runs/detect/digit_detector_latest/weights/best.pt"
@@ -71,7 +71,7 @@ def boxes_from_result(result) -> list[dict]:
     conf_arr = boxes.conf.cpu().numpy()
     xyxy_arr = boxes.xyxy.cpu().numpy()
     out = []
-    for cls, conf, (x1, y1, x2, y2) in zip(cls_arr, conf_arr, xyxy_arr):
+    for cls, conf, (x1, y1, x2, y2) in zip(cls_arr, conf_arr, xyxy_arr, strict=False):
         cx = (x1 + x2) / 2
         cy = (y1 + y2) / 2
         h = y2 - y1
@@ -127,12 +127,12 @@ def group_into_rows(boxes: list[dict]) -> list[list[dict]]:
             else:
                 new_centers.append(centers[i])
 
-        if all(abs(a - b) < 1e-3 for a, b in zip(centers, new_centers)):
+        if all(abs(a - b) < 1e-3 for a, b in zip(centers, new_centers, strict=False)):
             break
         centers = new_centers
 
     # Сортуємо кластери за Y центром (зверху вниз), всередині — за X
-    cluster_centers = list(zip(centers, clusters))
+    cluster_centers = list(zip(centers, clusters, strict=False))
     cluster_centers.sort(key=lambda x: x[0])
     rows = [sorted(cluster, key=lambda b: b["cx"]) for _, cluster in cluster_centers]
 
@@ -168,7 +168,8 @@ def recognize(image_path: str, model_path: str = DEFAULT_MODEL) -> dict:
     max_h = max(b["h"] for b in boxes)
     boxes = [b for b in boxes if b["h"] > max_h * 0.4]
     # boxes = [b for b in boxes if b["cx"] > 150]
-    print(f"RAW BOXES: {[(b['cls'], int(b['cx']), int(b['cy']), int(b['h'])) for b in boxes]}") # Додано для діагностики
+    raw_summary = [(b["cls"], int(b["cx"]), int(b["cy"]), int(b["h"])) for b in boxes]
+    print(f"RAW BOXES: {raw_summary}")  # Додано для діагностики
     rows = group_into_rows(boxes)
 
     if len(rows) != 3:

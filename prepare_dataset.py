@@ -19,9 +19,9 @@
   argv[3] — куди писати датасет
 """
 
-import sys
 import random
 import shutil
+import sys
 from pathlib import Path
 
 VAL_RATIO = 0.2   # 20% у val, 80% у train

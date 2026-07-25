@@ -9,8 +9,8 @@ Usage:
 """
 
 from pathlib import Path
-from ultralytics import YOLO
 
+from ultralytics import YOLO
 
 MODELS = [
     "runs/detect/display_detector_v1/weights/best.pt",

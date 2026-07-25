@@ -7,16 +7,14 @@
 """
 
 import argparse
-import sys
 import json
-import time
-import shutil
 from pathlib import Path
+
 import cv2
 from ultralytics import YOLO
 
 # Імпортуємо логіку з recognize_digits
-from recognize_digits import boxes_from_result, group_into_rows, assemble_number, class_agnostic_nms
+from recognize_digits import assemble_number, boxes_from_result, class_agnostic_nms, group_into_rows
 
 # ---------- НАЛАШТУВАННЯ ----------
 DISPLAY_MODEL_PT = "runs/detect/display_detector_latest/weights/best.pt"
@@ -81,7 +79,11 @@ def main(orig_dir: str):
     display_model = YOLO(DISPLAY_MODEL_PT)
     digit_model = YOLO(DIGIT_MODEL_PT)
 
-    pairs = [(jpg, jpg.with_suffix(".json")) for jpg in orig.glob("*.jpg") if jpg.with_suffix(".json").exists()]
+    pairs = [
+        (jpg, jpg.with_suffix(".json"))
+        for jpg in orig.glob("*.jpg")
+        if jpg.with_suffix(".json").exists()
+    ]
 
     print(f"Знайдено {len(pairs)} фото з ground truth у {orig}")
     print("=" * 80)
@@ -92,7 +94,7 @@ def main(orig_dir: str):
     n_fail = 0
     
     for jpg, json_path in pairs:
-        with open(json_path, "r", encoding="utf-8") as f:
+        with open(json_path, encoding="utf-8") as f:
             gt = json.load(f)
         gt_str = f"{gt['sys']}/{gt['dia']}/{gt['pul']}"
 
