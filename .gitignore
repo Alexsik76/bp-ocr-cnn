@@ -63,4 +63,4 @@ desktop.ini
 # Local logs
 *.log
 repo
-img/
+/img/
