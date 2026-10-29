@@ -137,16 +137,25 @@ pip install -r requirements.txt
 
 ```bash
 # Перевірити поточну модель на тестовому фото (PyTorch)
-python validate_pipeline.py img_test
+uv run bpocr validate
 
 # Перевірити ONNX fp32
-python validate_pipeline.py img_test --backend onnx
+uv run bpocr validate --backend onnx
 
 # Перевірити int8 (браузерний варіант)
-python validate_pipeline.py img_test --backend int8
+uv run bpocr validate --backend int8
 
 # Оновити ONNX після перетренування
-python export_onnx.py && python quantize.py
+uv run bpocr export
+
+# Імпортувати сесії зйомки (підпапки з фото + values.txt) у photos_dir
+uv run bpocr import <raw_dir> [--dry-run]
+
+# Згенерувати розмітку дисплея/цифр, звірену з ground truth (пише у work/, див. work/review.csv)
+uv run bpocr autolabel
+
+# Зібрати train/val датасети з цієї розмітки (без тестового спліту)
+uv run bpocr build-datasets
 ```
 
 Потрібно: Python 3.12+, PyTorch (CPU достатньо), ultralytics, onnx, onnxruntime. Залежності в `requirements.txt`.
@@ -175,22 +184,22 @@ source venv/bin/activate
 # (нові .jpg + .json пари, сумісні з форматом aivm-photo-api)
 
 # 2. Нарізати cropped через YOLO #1
-python infer_yolo.py img
+uv run bpocr crop
 
 # 3. Розмітити нові cropped через https://www.makesense.ai/
 #    Зберегти в labels/labelsN/ (нова порція, не перезаписувати попередню)
 
 # 4. Перевірити розмітку через ground truth
-python verify_labels.py cropped labels/labelsN img
+uv run bpocr verify-labels --labels labels/labelsN
 
 # 5. Перепідготувати датасет
-python prepare_dataset_digits.py cropped labels/labelsN dataset_digits
+uv run bpocr prepare-digits --labels labels/labelsN
 
 # 6. Тренування — автоматично ротує latest → bak
-python train_yolo_digits.py
+uv run bpocr train-digits
 
 # 7. Валідація на всіх фото
-python validate_pipeline.py img
+uv run bpocr validate
 
 # 8. Якщо нова модель краща за bak — скопіювати best.pt у aivm-photo-api,
 #    redeploy контейнера. Інакше — повернутись до bak.
@@ -219,11 +228,10 @@ source venv/bin/activate
 .\venv\Scripts\Activate.ps1
 
 # Після train_yolo_digits.py (або train_yolo.py):
-python export_onnx.py       # best.pt -> best.onnx
-python quantize.py          # best.onnx -> best_int8.onnx
+uv run bpocr export         # best.pt -> best.onnx -> best_int8.onnx
 
 # Перевірити що точність не впала
-python validate_pipeline.py img --backend int8
+uv run bpocr validate --backend int8
 ```
 
 ### Опції `--backend` у `validate_pipeline.py`

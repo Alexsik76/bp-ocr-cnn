@@ -136,17 +136,26 @@ pip install -r requirements.txt
 Run evaluation commands:
 
 ```bash
-# Check current model performance on test photo (PyTorch)
-python validate_pipeline.py img_test
+# Check current model performance (PyTorch)
+uv run bpocr validate
 
 # Check ONNX fp32
-python validate_pipeline.py img_test --backend onnx
+uv run bpocr validate --backend onnx
 
 # Check int8 (browser version)
-python validate_pipeline.py img_test --backend int8
+uv run bpocr validate --backend int8
 
 # Update ONNX after retraining
-python export_onnx.py && python quantize.py
+uv run bpocr export
+
+# Import captured sessions (subfolders with photos + values.txt) into photos_dir
+uv run bpocr import <raw_dir> [--dry-run]
+
+# Generate display/digit labels verified by ground truth (writes to work/, see work/review.csv)
+uv run bpocr autolabel
+
+# Build train/val datasets from those labels (test split excluded)
+uv run bpocr build-datasets
 ```
 
 Requirements: Python 3.12+, PyTorch (CPU is sufficient), ultralytics, onnx, onnxruntime. Dependencies are listed in `requirements.txt`.
@@ -175,22 +184,22 @@ source venv/bin/activate
 # (new .jpg + .json pairs compatible with aivm-photo-api format)
 
 # 2. Crop displays via YOLO #1
-python infer_yolo.py img
+uv run bpocr crop
 
 # 3. Label new cropped images using https://www.makesense.ai/
 #    Save into labels/labelsN/ (new batch, do not overwrite previous)
 
 # 4. Verify labels against ground truth
-python verify_labels.py cropped labels/labelsN img
+uv run bpocr verify-labels --labels labels/labelsN
 
 # 5. Re-prepare the dataset
-python prepare_dataset_digits.py cropped labels/labelsN dataset_digits
+uv run bpocr prepare-digits --labels labels/labelsN
 
 # 6. Training — automatically rotates latest → bak
-python train_yolo_digits.py
+uv run bpocr train-digits
 
 # 7. Validate on all photos
-python validate_pipeline.py img
+uv run bpocr validate
 
 # 8. If the new model is better than bak — copy best.pt to aivm-photo-api,
 #    redeploy the container. Otherwise — revert to bak.
@@ -219,11 +228,10 @@ source venv/bin/activate
 .\venv\Scripts\Activate.ps1
 
 # After train_yolo_digits.py (or train_yolo.py):
-python export_onnx.py       # best.pt -> best.onnx
-python quantize.py          # best.onnx -> best_int8.onnx
+uv run bpocr export         # best.pt -> best.onnx -> best_int8.onnx
 
 # Verify that accuracy did not decrease
-python validate_pipeline.py img --backend int8
+uv run bpocr validate --backend int8
 ```
 
 ### `--backend` Options in `validate_pipeline.py`
