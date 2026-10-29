@@ -151,6 +151,9 @@ uv run bpocr export
 # Імпортувати сесії зйомки (підпапки з фото + values.txt) у photos_dir
 uv run bpocr import <raw_dir> [--dry-run]
 
+# Відновити вручну розмічені кропи дисплея з історії git у work/manual/crops
+uv run bpocr restore-manual
+
 # Згенерувати розмітку дисплея/цифр, звірену з ground truth (пише у work/, див. work/review.csv)
 uv run bpocr autolabel
 

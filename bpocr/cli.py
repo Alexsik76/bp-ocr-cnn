@@ -29,6 +29,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("raw_dir", type=Path, help="folder with one subfolder per session")
     p.add_argument("--dry-run", action="store_true", help="print what would be written")
 
+    sub.add_parser("restore-manual", parents=[common],
+                   help="restore the manually labelled display crops from git history")
     sub.add_parser("autolabel", parents=[common],
                    help="generate display and digit labels verified by ground truth")
     sub.add_parser("build-datasets", parents=[common],
@@ -68,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         cfg = load_config(args.config)
         return run(args, cfg) or 0
-    except (FileNotFoundError, ValueError) as e:
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
 
@@ -82,6 +84,9 @@ def run(args: argparse.Namespace, cfg) -> int | None:
         case "import":
             from bpocr.importer import import_photos
             return import_photos(cfg, args.raw_dir, args.dry_run)
+        case "restore-manual":
+            from bpocr.manual import restore_manual
+            return restore_manual(cfg)
         case "autolabel":
             from bpocr.autolabel import autolabel
             return autolabel(cfg)

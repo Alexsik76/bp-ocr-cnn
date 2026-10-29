@@ -1,15 +1,18 @@
 """Automatic labels: display boxes (manual or predicted), digit boxes verified by ground truth."""
 
 import csv
+import shutil
 from pathlib import Path
 
 import cv2
 
 from bpocr.config import Config
 from bpocr.data import discover_photos, load_ground_truth
+from bpocr.manual import manual_crops_dir, manual_digit_labels_dir
 from bpocr.pipeline import best_display_box, crop_display, read_digits_with_boxes
 
 REVIEW_COLUMNS = ["stem", "subfolder", "reason", "predicted", "expected"]
+MANUAL_CHECK_COLUMNS = ["stem", "predicted", "expected", "match"]
 
 
 def to_yolo_line(cls: int, x1: float, y1: float, x2: float, y2: float, w: int, h: int) -> str:
@@ -37,6 +40,28 @@ def read_manual_box(path: Path, w: int, h: int) -> tuple[int, int, int, int] | N
     return None
 
 
+def clear_files(directory: Path) -> None:
+    for f in directory.iterdir():
+        if f.is_file():
+            f.unlink()
+
+
+def place_manual_digits(label: Path, crop: Path, digits_dir: Path, crops_dir: Path) -> bool:
+    """Copies a manual digit label and its crop unchanged; False if either is missing."""
+    if not (label.is_file() and crop.is_file()):
+        return False
+    shutil.copy2(label, digits_dir / label.name)
+    shutil.copy2(crop, crops_dir / crop.name)
+    return True
+
+
+def write_csv(path: Path, columns: list[str], rows: list[dict]) -> None:
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def _fmt(values: dict) -> str:
     return f"{values['sys']}/{values['dia']}/{values['pul']}"
 
@@ -57,17 +82,24 @@ def autolabel(cfg: Config) -> int:
     crops_dir = cfg.work_dir / "crops"
     for d in (display_dir, digits_dir, crops_dir):
         d.mkdir(parents=True, exist_ok=True)
+    # Drop outputs of previous runs so that a photo never keeps a stale automatic label
+    clear_files(digits_dir)
+    clear_files(crops_dir)
+
+    manual_labels = manual_digit_labels_dir(cfg)
+    manual_crops = manual_crops_dir(cfg)
+    if not manual_crops.is_dir():
+        print("work/manual/crops is missing - run 'bpocr restore-manual' first; "
+              "continuing with automatic digit labels only")
 
     review = []
-    n_manual = n_auto = n_digits = 0
+    manual_check = []
+    n_manual = n_auto = n_manual_digits = n_auto_digits = 0
 
     for photo in photos:
         stem = photo.stem
         expected = load_ground_truth(photo.json_path)
-        # Drop outputs of previous runs so that a changed outcome leaves no stale file
-        for stale in (display_dir / f"{stem}.txt", digits_dir / f"{stem}.txt",
-                      crops_dir / f"{stem}.jpg"):
-            stale.unlink(missing_ok=True)
+        (display_dir / f"{stem}.txt").unlink(missing_ok=True)
 
         def add_review(reason: str, predicted: str, photo=photo, expected=expected):
             review.append({"stem": photo.stem, "subfolder": photo.subfolder, "reason": reason,
@@ -93,29 +125,36 @@ def autolabel(cfg: Config) -> int:
         (display_dir / f"{stem}.txt").write_text(
             to_yolo_line(0, *box, w, h) + "\n", encoding="utf-8")
 
-        crop = crop_display(img, box, cfg)
-        cv2.imwrite(str(crops_dir / f"{stem}.jpg"), crop)
+        # Manual digit labels always win over automatic ones
+        if place_manual_digits(manual_labels / f"{stem}.txt", manual_crops / f"{stem}.jpg",
+                               digits_dir, crops_dir):
+            n_manual_digits += 1
+            values, error, _ = read_digits_with_boxes(
+                cv2.imread(str(crops_dir / f"{stem}.jpg")), digit_model, cfg)
+            manual_check.append({"stem": stem, "predicted": _fmt(values) if values else error,
+                                 "expected": _fmt(expected), "match": values == expected})
+            continue
 
+        crop = crop_display(img, box, cfg)
         values, error, boxes = read_digits_with_boxes(crop, digit_model, cfg)
         if values is None:
             add_review("mismatch", error or "")
         elif values != expected:
             add_review("mismatch", _fmt(values))
         else:
+            cv2.imwrite(str(crops_dir / f"{stem}.jpg"), crop)
             ch, cw = crop.shape[:2]
             lines = [to_yolo_line(b["cls"], b["x1"], b["y1"], b["x2"], b["y2"], cw, ch)
                      for b in boxes]
             (digits_dir / f"{stem}.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-            n_digits += 1
+            n_auto_digits += 1
 
     review_path = cfg.work_dir / "review.csv"
-    with open(review_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=REVIEW_COLUMNS)
-        writer.writeheader()
-        writer.writerows(review)
+    write_csv(review_path, REVIEW_COLUMNS, review)
+    write_csv(cfg.work_dir / "manual-check.csv", MANUAL_CHECK_COLUMNS, manual_check)
 
     print(f"Photos with ground truth: {len(photos)}")
     print(f"Display labels: manual={n_manual} auto={n_auto}")
-    print(f"Digit labels accepted: {n_digits}")
+    print(f"Digit labels: manual={n_manual_digits} auto-accepted={n_auto_digits}")
     print(f"Review: {len(review)} (see {review_path})")
     return 0
