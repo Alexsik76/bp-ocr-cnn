@@ -1,0 +1,13 @@
+photos_dir = "/mnt/nas-media/aivm_folder"
+work_dir = "work"
+display_model = "runs/detect/display_detector_latest/weights/best.pt"
+digit_model = "runs/detect/digit_detector_latest/weights/best.pt"
+display_conf = 0.05
+digit_conf = 0.25
+padding_ratio = 0.03
+crop_width = 400
+crop_height = 480
+nms_iou = 0.4
+min_height_ratio = 0.4
+test_split = "splits/test.txt"
+manual_display_labels = "labels/labels1"
