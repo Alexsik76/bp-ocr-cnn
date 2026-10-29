@@ -78,3 +78,37 @@ def test_build_datasets_groups_sessions_and_excludes_test(tmp_path):
             members = {st for i, st in enumerate(stems) if i // 3 == s and i < 12}
             members -= test_stems
             assert members <= train or members <= val
+
+
+def test_build_datasets_excludes_session_in_test_split(tmp_path):
+    cfg = _config(tmp_path)
+    folder = cfg.photos_dir / "2026-05"
+    folder.mkdir(parents=True)
+    (cfg.work_dir / "labels" / "display").mkdir(parents=True)
+    (cfg.work_dir / "labels" / "digits").mkdir(parents=True)
+    (cfg.work_dir / "crops").mkdir(parents=True)
+
+    stems = ["photo1", "photo2", "photo3", "photo4"]
+    sessions = ["s04", "s04", "s05", None]
+    for stem, session in zip(stems, sessions, strict=True):
+        (folder / f"{stem}.jpg").write_bytes(b"x")
+        meta = {"sys": 120, "dia": 80, "pul": 60}
+        if session:
+            meta["session"] = session
+        (folder / f"{stem}.json").write_text(json.dumps(meta))
+        (cfg.work_dir / "labels" / "display" / f"{stem}.txt").write_text("0 .5 .5 .1 .1\n")
+        (cfg.work_dir / "labels" / "digits" / f"{stem}.txt").write_text("1 .5 .5 .1 .1\n")
+        (cfg.work_dir / "crops" / f"{stem}.jpg").write_bytes(b"x")
+
+    cfg.test_split.write_text("s04\n")
+    assert build_datasets(cfg) == 0
+
+    for name in ("display", "digits"):
+        root = cfg.work_dir / "datasets" / name
+        assert (root / "data.yaml").is_file()
+        train = {p.stem for p in (root / "images" / "train").iterdir()}
+        val = {p.stem for p in (root / "images" / "val").iterdir()}
+        assert train.isdisjoint(val)
+        assert "photo1" not in (train | val)
+        assert "photo2" not in (train | val)
+        assert (train | val) == {"photo3", "photo4"}

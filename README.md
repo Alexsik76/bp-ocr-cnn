@@ -161,6 +161,8 @@ uv run bpocr autolabel
 uv run bpocr build-datasets
 ```
 
+`splits/test.txt` accepts photo stems, YYYY-MM folders or session names.
+
 Requirements: Python 3.12+, PyTorch (CPU is sufficient), ultralytics, onnx, onnxruntime. Dependencies are listed in `requirements.txt`.
 
 ## How It Works — Full Development Cycle
