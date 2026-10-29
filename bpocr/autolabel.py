@@ -8,6 +8,7 @@ import cv2
 
 from bpocr.config import Config
 from bpocr.data import discover_photos, load_ground_truth
+from bpocr.gemini_display import gemini_dir
 from bpocr.manual import manual_crops_dir, manual_digit_labels_dir
 from bpocr.pipeline import best_display_box, crop_display, read_digits_with_boxes
 
@@ -94,7 +95,7 @@ def autolabel(cfg: Config) -> int:
 
     review = []
     manual_check = []
-    n_manual = n_auto = n_manual_digits = n_auto_digits = 0
+    n_manual = n_auto = n_gemini = n_manual_digits = n_auto_digits = 0
 
     for photo in photos:
         stem = photo.stem
@@ -116,11 +117,16 @@ def autolabel(cfg: Config) -> int:
             n_manual += 1
         else:
             found = best_display_box(display_model(img, conf=cfg.display_conf, verbose=False)[0])
-            if found is None:
-                add_review("display-not-found", "")
-                continue
-            box = found[0]
-            n_auto += 1
+            if found is not None:
+                box = found[0]
+                n_auto += 1
+            else:
+                # Fallback: a box suggested by Gemini (bpocr gemini-display)
+                box = read_manual_box(gemini_dir(cfg) / f"{stem}.txt", w, h)
+                if box is None:
+                    add_review("display-not-found", "")
+                    continue
+                n_gemini += 1
 
         (display_dir / f"{stem}.txt").write_text(
             to_yolo_line(0, *box, w, h) + "\n", encoding="utf-8")
@@ -154,7 +160,7 @@ def autolabel(cfg: Config) -> int:
     write_csv(cfg.work_dir / "manual-check.csv", MANUAL_CHECK_COLUMNS, manual_check)
 
     print(f"Photos with ground truth: {len(photos)}")
-    print(f"Display labels: manual={n_manual} auto={n_auto}")
+    print(f"Display labels: manual={n_manual} auto={n_auto} gemini={n_gemini}")
     print(f"Digit labels: manual={n_manual_digits} auto-accepted={n_auto_digits}")
     print(f"Review: {len(review)} (see {review_path})")
     return 0

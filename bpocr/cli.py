@@ -33,6 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="restore the manually labelled display crops from git history")
     sub.add_parser("autolabel", parents=[common],
                    help="generate display and digit labels verified by ground truth")
+    sub.add_parser("gemini-display", parents=[common],
+                   help="ask Gemini for display boxes of photos with display-not-found")
     sub.add_parser("build-datasets", parents=[common],
                    help="build train/val datasets from autolabel output")
 
@@ -87,6 +89,9 @@ def run(args: argparse.Namespace, cfg) -> int | None:
         case "restore-manual":
             from bpocr.manual import restore_manual
             return restore_manual(cfg)
+        case "gemini-display":
+            from bpocr.gemini_display import gemini_display
+            return gemini_display(cfg)
         case "autolabel":
             from bpocr.autolabel import autolabel
             return autolabel(cfg)
