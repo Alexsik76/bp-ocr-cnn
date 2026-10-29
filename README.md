@@ -151,6 +151,9 @@ uv run bpocr export
 # Import captured sessions (subfolders with photos + values.txt) into photos_dir
 uv run bpocr import <raw_dir> [--dry-run]
 
+# Restore the manually labelled display crops from git history into work/manual/crops
+uv run bpocr restore-manual
+
 # Generate display/digit labels verified by ground truth (writes to work/, see work/review.csv)
 uv run bpocr autolabel
 
