@@ -67,7 +67,10 @@ def load_session(json_path: Path | None) -> str | None:
 
 
 def load_test_split(path: Path) -> set[str]:
-    """Stems or subfolder names listed one per line; lines starting with # are comments."""
+    """
+    Stems, subfolder names or session names listed one per line;
+    lines starting with # are comments.
+    """
     if not path.is_file():
         return set()
     entries = set()
@@ -80,5 +83,8 @@ def load_test_split(path: Path) -> set[str]:
 
 def split_of(photo: Photo, test_entries: set[str]) -> str:
     if photo.stem in test_entries or photo.subfolder in test_entries:
+        return "test"
+    session = load_session(photo.json_path)
+    if session is not None and session in test_entries:
         return "test"
     return "train"

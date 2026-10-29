@@ -63,3 +63,12 @@ def test_split_of_by_stem_or_subfolder(tmp_path):
     a, b, c = discover_photos(tmp_path)
     entries = {"a", "2026-06"}
     assert [split_of(p, entries) for p in (a, b, c)] == ["test", "test", "train"]
+
+
+def test_split_of_by_session(tmp_path):
+    touch(tmp_path / "2026-05" / "a.jpg")
+    touch(tmp_path / "2026-05" / "a.json", json.dumps({"session": "s04"}))
+    (photo,) = discover_photos(tmp_path)
+    assert split_of(photo, {"s04"}) == "test"
+    assert split_of(photo, set()) == "train"
+    assert split_of(photo, {"other"}) == "train"

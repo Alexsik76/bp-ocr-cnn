@@ -1,5 +1,5 @@
 # Test split: 10 photo stems, random.Random(42).sample over sorted stems.
-# A stem or a YYYY-MM subfolder name listed here belongs to the test split.
+# A stem, a YYYY-MM subfolder name or a session name listed here belongs to the test split.
 20260503_043525
 20260503_152856
 20260504_053951
@@ -10,3 +10,5 @@
 20260517_060821
 20260520_044941
 20260521_044557
+s04
+s05

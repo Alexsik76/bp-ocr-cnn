@@ -161,6 +161,8 @@ uv run bpocr autolabel
 uv run bpocr build-datasets
 ```
 
+`splits/test.txt` приймає імена фото без розширення, назви тек YYYY-MM або назви сеансів.
+
 Потрібно: Python 3.12+, PyTorch (CPU достатньо), ultralytics, onnx, onnxruntime. Залежності в `requirements.txt`.
 
 ## Як це працює — повний цикл розробки
